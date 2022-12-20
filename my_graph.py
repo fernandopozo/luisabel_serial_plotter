@@ -230,7 +230,7 @@ class MyGraph(pg.PlotWidget):											# this is supposed to be the python conv
 	def create_plots(self):
 		for i in range (MAX_PLOTS):
 			logging.debug("val of i:" + str(i))
-			p = self.plot(pen = (COLORS[i%24]))
+			p = self.plot(pen = (f"#{COLORS[i%24]}"))
 			self.plot_refs.append(p)
 
 
@@ -290,7 +290,7 @@ class MyGraph(pg.PlotWidget):											# this is supposed to be the python conv
 				
 				self.dataset_changed = True
 			
-			pg.QtGui.QApplication.processEvents()						# for whatever reason, works faster when using processEvent.
+			QApplication.processEvents()						# for whatever reason, works faster when using processEvent.
 		
 
 ## THIS PART WON'T BE EXECUTED WHEN IMPORTED AS A SUBMODULE, BUT ONLY WHEN TESTED INDEPENDENTLY ##
@@ -329,7 +329,7 @@ if __name__ == "__main__":
 			self.plot.start_plotting()
 			
 			self.data_timer = QTimer()
-			self.data_timer.timeout.connect(self.on_data_timer)
+			self.data_timer.timeout.connect(self.on_data_timer) # data test is here (function needs a lambda for an argument)
 			self.data_timer.start(self.data_tick_ms)
 
 			self.plot.check_toggles("all")
