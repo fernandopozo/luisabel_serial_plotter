@@ -14,6 +14,8 @@ import logging
 #logging.basicConfig(level=logging.DEBUG)			# enable debug messages
 from future.utils import text_type
 
+from utils import value2volt						# custom function to list serial ports
+
 logging.basicConfig(level = logging.WARNING)
 
 # custom packages #
@@ -103,6 +105,9 @@ POINTS_PER_PLOT = 2000													# width of x axis, corresponding to the numbe
 
 # THREAD STUFF #  (not needed ATM)
 
+# PARAMETERS TO TOUCH
+ELECTRODE_NUMBER = 30
+INCREMENT = 10
 		
 # MAIN WINDOW #			
 
@@ -162,7 +167,7 @@ class MainWindow(QMainWindow):
 		self.setPalette(self.palette)
 		
 		# window stuff #
-		self.setWindowTitle("Modify title")					# relevant title
+		self.setWindowTitle("App title")					# relevant title
 		self.setWindowIcon(QIcon("RE_logo_32p.png"))					# basic raquena engineering branding
 		self.resize(1200,800)											# setting initial window size
 		# menubar #
@@ -224,6 +229,10 @@ class MainWindow(QMainWindow):
 		self.plot_frame.enable_toggles("none")
 		self.plot_frame.check_toggles("none")
 		self.layout_plot.addWidget(self.plot_frame)
+
+		# set plot labels #
+		self.plot_frame.set_channels_labels([f"E{i}" for i in range(1,ELECTRODE_NUMBER+1)])
+
 		# buttons for plot #
 		self.layout_player = QHBoxLayout()
 		self.layoutV1.addLayout(self.layout_player)
@@ -447,7 +456,9 @@ class MainWindow(QMainWindow):
 		elif (endline_style == ENDLINE_OPTIONS[2]):						# "Carriage Return"
 			self.endline = b"\r"		
 		elif (endline_style == ENDLINE_OPTIONS[3]):						# "Both NL & CR"
-			self.endline = b"\r\n"	
+			self.endline = b"\r\n"
+		elif (endline_style == ENDLINE_OPTIONS[3]):						# "Both NL & CR"
+			self.endline = b"\t\r\n"
 			
 		logging.debug(self.endline)			
 		
@@ -497,7 +508,7 @@ class MainWindow(QMainWindow):
 				xonxoff=False, 
 				rtscts=False, 
 				write_timeout=None, 
-				dsrdtr=False, 
+				dsrdtr=False,
 				inter_byte_timeout=None, 
 				exclusive=None
 				)
@@ -752,7 +763,9 @@ class MainWindow(QMainWindow):
 		mid_buffer = ''
 
 		try:
-			byte_buffer = self.serial_port.read(SERIAL_BUFFER_SIZE)		# up to 1000 or as much as in buffer.
+			# byte_buffer = self.serial_port.read(SERIAL_BUFFER_SIZE)		# up to 1000 or as much as in buffer.
+			byte_buffer = self.serial_port.readline()
+			print(f"byte_buffer: {byte_buffer}")
 		except Exception as e:
 			self.on_port_error(e)
 			self.on_button_disconnect_click()							# we've crashed the serial, so disconnect and REFRESH PORTS!!!
@@ -767,19 +780,25 @@ class MainWindow(QMainWindow):
 				self.read_buffer = self.read_buffer + mid_buffer
 				data_points = self.read_buffer.split(self.endline)
 				self.read_buffer = data_points[-1]  # clean the buffer, saving the non completed data_points
-				a = data_points[:-1]
-				for data_point in a:  # so all data points except last.
-					self.arduino_parse(data_point)
+				a = data_points[:-1][0].split("\t")[:-1]
+				print(a)
+				self.arduino_parse(a)
+				# for data_point in a:  # so all data points except last.
+				# 	self.arduino_parse(data_point)
 
 	def arduino_parse(self,readed):									# perform data processing as required (START WITH ARDUINO STYLE, AND ADD OTHER STYLES).#
-
-		vals = readed.replace(' ',',')									# replace empty spaces for commas.
-		vals = vals.replace(':',',')				# fast fix for inline labels incompatibility. MAKE IT BETTER !!!
-		vals = vals.split(',')											# arduino serial plotter splits with both characters.
-
+		if len(readed) == ELECTRODE_NUMBER:
+			vals = [value2volt(x) for x in readed]
+		else:
+			vals = [0] * ELECTRODE_NUMBER
+		# vals = readed.replace(' ',',')									# replace empty spaces for commas.
+		# vals = vals.replace(':',',')				# fast fix for inline labels incompatibility. MAKE IT BETTER !!!
+		# vals = vals.split(',')											# arduino serial plotter splits with both characters.
+		increment = [x*INCREMENT for x in range(0, len(vals))]				# create a vector of incremental values
+		vals = [x + increment[i] for i, x in enumerate(vals)]
+		print(f"vals: {vals}")
 		valsf = []
-
-		self.plot_frame.n_plots = 5
+		self.plot_frame.n_plots = 3
 
 		if(vals[0] == ''):
 			self.timeouts = self.timeouts + 1
@@ -799,7 +818,8 @@ class MainWindow(QMainWindow):
 
 			try:
 				for val in vals:
-					valsf.append(float(val))
+					# valsf.append(float(val))
+					valsf.append(val)
 			except:
 				logging.debug("It contains also text");
 				# add to a captions vector
@@ -807,7 +827,7 @@ class MainWindow(QMainWindow):
 				self.plot_frame.set_channels_labels(text_vals)
 			else:
 				self.add_values_to_dataset(valsf)
-
+				print(f"valsf: {valsf}")
 			self.plot_frame.update()
 			#print("dataset_changed = "+ str(self.plot_frame.graph.dataset_changed))
 
@@ -815,6 +835,7 @@ class MainWindow(QMainWindow):
 		# print("values =")
 		# print(values)
 		self.dataset.append(values)  # appends all channels together
+		print(f"values dataset: {values}")
 		# enabling corresponding toggles #
 		for i in range(my_graph.MAX_PLOTS):  # this may not be the greatest option. it's fine.
 			try:
@@ -827,7 +848,6 @@ class MainWindow(QMainWindow):
 					self.plot_frame.toggles[i].setChecked(True)
 			except:
 				pass
-
 		self.first_toggles = self.first_toggles + 1				# ???
 
 	def add_emg_sensor_data(self):								# reads the data in the specific binary format of the emg sensor
@@ -1086,7 +1106,6 @@ class MainWindow(QMainWindow):
 	def set_plot_range(self):
 		logging.debug("set_range_action method called")
 		plot_range_dialog = RangeDialog()
-
 		if plot_range_dialog.exec_():
 			print(plot_range_dialog.getInputs())
 			self.plot_frame.graph.setLimits(yMin=int(plot_range_dialog.getInputs()[0]),
