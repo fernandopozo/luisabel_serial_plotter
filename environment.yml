@@ -13,3 +13,5 @@ dependencies:
     - pyserial==3.5
     - qtwidgets==0.18
     - pyinstaller
+    - pandas
+    - seaborn
